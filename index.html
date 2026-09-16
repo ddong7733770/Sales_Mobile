@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>아이코닉스 현장 재고 대시보드</title>
+  
+  <!-- SheetJS -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+  <style>
+    :root {
+      /* Airtable Color System */
+      --color-primary-500: #FCB400;
+      --color-action-500: #166EE1;
+      --base-yellow: #FCB400;
+      --base-red:    #F82B60;
+      --base-purple: #8B46FF;
+      --base-blue:   #2D7FF9;
+      --base-cyan:   #18BFFF;
+      --base-green:  #20C933;
+      --base-gray:   #666666;
+
+      --bg-base:     #FFFFFF;
+      --bg-subtle:   #FAFAFA;
+      
+      --text-primary:    #1F1F1F;
+      --text-secondary:  #605E5C;
+      --text-tertiary:   #898989;
+      
+      --border-default: #E0E0E0;
+      --border-subtle:  #F0F0F0;
+      --border-focus:   #166EE1;
+
+      --radius-sm: 3px;
+      --radius-md: 6px;
+      --radius-lg: 8px;
+      
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+    }
+
+    * { box-sizing: border-box; }
+    body { 
+      margin: 0; 
+      font-family: Inter, 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+      color: var(--text-primary); 
+      background: var(--bg-subtle);
+      font-size: 13px;
+    }
+
+    /* Top Navigation */
+    .topbar { 
+      position: sticky; top: 0; z-index: 100;
+      height: 52px; background: var(--bg-base); 
+      border-bottom: 1px solid var(--border-default); 
+      display: flex; align-items: center; padding: 0 16px; gap: 12px; 
+    }
+    .brand-icon { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 4px; background: linear-gradient(135deg, var(--base-yellow) 50%, var(--base-red) 50%); color: #fff; font-weight: 700; font-size: 14px; }
+    .topbar strong { font-size: 15px; font-weight: 700; }
+    .status-badge { margin-left: auto; font-size: 10px; padding: 3px 6px; border-radius: var(--radius-sm); background: var(--bg-subtle); color: var(--text-secondary); border: 1px solid var(--border-default); }
+
+    /* Filters & Search */
+    .filter-section {
+      position: sticky; top: 52px; z-index: 99;
+      background: var(--bg-base); padding: 12px 16px;
+      border-bottom: 1px solid var(--border-default);
+      box-shadow: var(--shadow-sm);
+    }
+    
+    /* Team Selector */
+    .team-selector {
+      display: flex; background: var(--bg-subtle); border-radius: var(--radius-md); 
+      padding: 3px; margin-bottom: 12px; border: 1px solid var(--border-default);
+    }
+    .team-btn {
+      flex: 1; text-align: center; padding: 6px 0; font-size: 12px; font-weight: 650;
+      color: var(--text-secondary); border-radius: var(--radius-sm); cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .team-btn.active {
+      background: var(--bg-base); color: var(--color-action-500); 
+      box-shadow: var(--shadow-sm); border: 1px solid var(--border-subtle);
+    }
+
+    .search-row { display: flex; gap: 8px; margin-bottom: 10px; }
+    .input { 
+      flex: 1; background: var(--bg-subtle); border: 1px solid var(--border-default); 
+      border-radius: var(--radius-md); padding: 6px 10px; font-size: 13px; height: 32px;
+    }
+    .input:focus { outline: none; border-color: var(--border-focus); box-shadow: inset 0 0 0 1px var(--border-focus); background: var(--bg-base); }
+    
+    .select { 
+      background: var(--bg-subtle); border: 1px solid var(--border-default); 
+      border-radius: var(--radius-md); padding: 0 8px; font-size: 12px; height: 32px;
+    }
+
+    /* Tabs (Chips) */
+    .tabs-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+    .tabs-row::-webkit-scrollbar { display: none; }
+    .tab-chip {
+      white-space: nowrap; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border-default);
+      font-size: 12px; font-weight: 600; color: var(--text-secondary); background: var(--bg-base);
+      transition: all 0.2s ease; cursor: pointer;
+    }
+    .tab-chip.active { background: var(--color-action-500); color: #fff; border-color: var(--color-action-500); }
+
+    /* File Upload Section */
+    #file-upload-section {
+      background: var(--bg-base); padding: 16px; margin: 12px 16px; border-radius: var(--radius-lg);
+      border: 1px dashed var(--border-focus); text-align: center; display: none;
+    }
+    #file-upload-section input { display: none; }
+    .btn-action { 
+      background: var(--color-action-500); color: #fff; padding: 6px 12px; 
+      border-radius: var(--radius-md); font-size: 12px; font-weight: 600; 
+      display: inline-block; cursor: pointer; border: none;
+    }
+    .btn-outline {
+      background: var(--bg-base); color: var(--text-primary); border: 1px solid var(--border-default);
+      padding: 6px 12px; border-radius: var(--radius-md); font-size: 12px; font-weight: 600; 
+      cursor: pointer;
+    }
+    .btn-outline:active { background: var(--bg-subtle); }
+    
+    #change-file-container { padding: 12px 16px 0; display: none; }
+
+    /* List Container */
+    .list-container { padding: 0 16px 24px; display: flex; flex-direction: column; gap: 8px; margin-top: 12px;}
+    
+    /* Card / Accordion */
+    .card { background: var(--bg-base); border-radius: var(--radius-lg); border: 1px solid var(--border-default); box-shadow: var(--shadow-sm); overflow: hidden; }
+    .card-header { padding: 12px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; }
+    .card-header-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .item-name { font-size: 13px; font-weight: 700; line-height: 1.3; color: var(--text-primary); }
+    .item-code { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; }
+    
+    .card-header-bottom { display: flex; justify-content: space-between; align-items: center; }
+    .stock-total { font-size: 14px; font-weight: 800; color: var(--base-blue); }
+    
+    /* Airtable Pills */
+    .pill { padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 650; display: inline-flex; align-items: center; white-space: nowrap; }
+    .pill-red { background: #FFDCE5; color: #8B1737; }
+    .pill-gray { background: var(--border-default); color: var(--text-secondary); }
+
+    /* Accordion Body */
+    .card-body { display: none; border-top: 1px solid var(--border-subtle); background: var(--bg-subtle); padding: 12px; font-size: 12px; }
+    .card.open .card-body { display: block; }
+    .wh-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed var(--border-default); }
+    .wh-row:last-child { border-bottom: none; }
+    .wh-name { color: var(--text-secondary); }
+    .wh-val { font-weight: 700; color: var(--text-primary); }
+
+    /* Action Buttons */
+    .btn-copy {
+      width: 100%; margin-top: 12px; background: var(--bg-base); border: 1px solid var(--border-default);
+      color: var(--text-primary); padding: 8px; border-radius: var(--radius-md);
+      font-size: 12px; font-weight: 650; display: flex; justify-content: center; align-items: center; gap: 6px;
+    }
+    .btn-copy:active { background: var(--border-subtle); }
+
+    #loading { text-align: center; padding: 20px; color: var(--text-tertiary); display: none; }
+    #error-msg { text-align: center; padding: 16px; color: var(--base-red); background: #FCE4E4; margin: 16px 16px 0; border-radius: var(--radius-md); display: none; white-space: pre-wrap; font-weight: 600;}
+  </style>
+</head>
+<body>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="brand-icon">I</div>
+    <strong>현장 재고 대시보드</strong>
+    <span class="status-badge" id="status-badge">로드 중...</span>
+  </header>
+
+  <div id="error-msg"></div>
+
+  <!-- Local File Upload Section (Shown on local mode OR fetch fail) -->
+  <div id="file-upload-section">
+    <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">파일을 수동으로 불러옵니다.</div>
+    <label class="btn-action" style="margin-top: 8px;">
+      파일 선택하기
+      <input type="file" id="file-input" accept=".xls,.xlsx">
+    </label>
+  </div>
+  
+  <!-- Change File Button (Shown after manual upload success) -->
+  <div id="change-file-container">
+    <button id="btn-change-file" class="btn-outline" style="width: 100%;">파일 변경하기</button>
+  </div>
+
+  <!-- Filters -->
+  <section class="filter-section">
+    <div class="team-selector" id="team-selector">
+      <div class="team-btn active" data-team="ALL">전체</div>
+      <div class="team-btn" data-team="TEAM1">영업1팀</div>
+      <div class="team-btn" data-team="TEAM2">영업2팀</div>
+    </div>
+
+    <div class="search-row">
+      <input type="text" id="search-input" class="input" placeholder="품목명 또는 바코드 검색...">
+      <select id="category-filter" class="select">
+        <option value="">전체 대분류</option>
+      </select>
+    </div>
+    
+    <div class="tabs-row" id="tabs-container">
+      <div class="tab-chip active" data-tab="ALL">전체 핵심 품목</div>
+      <div class="tab-chip" data-tab="CAT:문완구">문완구</div>
+      <div class="tab-chip" data-tab="CAT:출판">출판</div>
+      <div class="tab-chip" data-tab="T1">T1</div>
+      <div class="tab-chip" data-tab="T2">T2</div>
+      <div class="tab-chip" data-tab="P1">P1</div>
+      <div class="tab-chip" data-tab="L1">L1</div>
+    </div>
+  </section>
+
+  <div id="loading">데이터를 처리 중입니다...</div>
+
+  <!-- Item List -->
+  <div class="list-container" id="list-container">
+    <!-- Cards will be rendered here -->
+  </div>
+
+  <script>
+    // 구글 스프레드시트 CSV 내보내기 주소 (CORS 에러를 피하기 위해 tq 엔드포인트 사용)
+    const DATA_URL = 'https://docs.google.com/spreadsheets/d/1PNVD5RW0EeyxETsmmzwkeuGFIWPatLueQGDpWqEaRoM/gviz/tq?tqx=out:csv&gid=0';
+    
+    let allData = [];
+    let warehouseCols = [];
+    let currentTab = 'ALL';
+    let currentTeam = 'ALL';
+    const MAIN_PRODUCTS = ['T1', 'T2', 'P1', 'L1'];
+    let autoRefreshInterval = null;
+
+    // Team Warehouse Definitions
+    const TEAM1_WH = [
+      '문완구 본사 창고', '문완구 자사물류 정품', '문완구 자사물류 적송재고', '문완구 자사물류 폐기', 
+      '문완구 오프라인행사 가상 창고(직판매)', '문완구 오프라인행사 가상 창고(직판매) 2', 
+      '물류거점창고_문완구', '영업본부 창고_에스에이치(SH)', '문완구_서울디자인재단 오프라인 창고', '문완구_서울관광재단 오프라인 창고'
+    ];
+    
+    const TEAM2_WH = [
+      '출판 본사 창고', '출판 자사물류 정품', '출판 자사물류 반품', '물류거점창고_출판', '출판 날개물류 출판창고'
+    ];
+
+    // Elements
+    const statusBadge = document.getElementById('status-badge');
+    const uploadSection = document.getElementById('file-upload-section');
+    const changeFileContainer = document.getElementById('change-file-container');
+    const fileInput = document.getElementById('file-input');
+    const listContainer = document.getElementById('list-container');
+    const searchInput = document.getElementById('search-input');
+    const categoryFilter = document.getElementById('category-filter');
+    const teamBtns = document.querySelectorAll('.team-btn');
+    const tabs = document.querySelectorAll('.tab-chip');
+    const errorMsg = document.getElementById('error-msg');
+    const loading = document.getElementById('loading');
+
+    // 이벤트 리스너 공통 등록
+    fileInput.addEventListener('change', handleFileUpload);
+    document.getElementById('btn-change-file').addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    // 1. 실행 환경 분기 및 초기 데이터 로드
+    const protocol = window.location.protocol;
+    if (protocol === 'http:' || protocol === 'https:') {
+      uploadSection.style.display = 'none';
+      loadDataFetch();
+      // 60초마다 구글 시트 자동 갱신
+      autoRefreshInterval = setInterval(loadDataFetch, 60000);
+    } else {
+      uploadSection.style.display = 'block';
+      statusBadge.textContent = '로컬 모드';
+    }
+
+    // 2. Fetch 기반 데이터 로드 (구글 시트 연동)
+    async function loadDataFetch() {
+      try {
+        loading.style.display = 'block';
+        errorMsg.style.display = 'none';
+        statusBadge.textContent = '동기화 중...';
+        
+        // 구글 시트 URL에 캐시 무력화 파라미터 추가
+        const response = await fetch(`${DATA_URL}&t=${Date.now()}`, { cache: 'no-store' });
+        
+        if (!response.ok) throw new Error('구글 시트에 접근할 수 없습니다.');
+        
+        const arrayBuffer = await response.arrayBuffer();
+        processExcelData(arrayBuffer);
+        
+        const now = new Date();
+        statusBadge.textContent = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')} 갱신됨`;
+        
+        uploadSection.style.display = 'none';
+        changeFileContainer.style.display = 'none';
+        
+      } catch (err) {
+        showError('구글 시트 연동에 실패했습니다.\n문서의 [공유] 권한이 "링크가 있는 모든 사용자(뷰어)"인지 확인해 주세요.');
+        statusBadge.textContent = '연동 실패';
+        statusBadge.style.color = 'var(--base-red)';
+        
+        uploadSection.style.display = 'block';
+        
+        if (autoRefreshInterval) {
+          clearInterval(autoRefreshInterval);
+        }
+      } finally {
+        loading.style.display = 'none';
+      }
+    }
+
+    // 3. 파일 직접 업로드 시 로드 (수동 모드 또는 연동 실패 시)
+    function handleFileUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      loading.style.display = 'block';
+      errorMsg.style.display = 'none';
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          processExcelData(event.target.result);
+          statusBadge.textContent = '파일 로드 완료';
+          statusBadge.style.color = 'var(--text-secondary)';
+          
+          uploadSection.style.display = 'none';
+          changeFileContainer.style.display = 'block';
+        } catch (err) {
+          showError('파일 파싱 중 오류가 발생했습니다.');
+        } finally {
+          loading.style.display = 'none';
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // 4. 공용 파싱 및 정제 로직 (SheetJS는 CSV 형태도 자동 파싱 지원)
+    function processExcelData(buffer) {
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      
+      const headers = XLSX.utils.sheet_to_json(ws, { header: 1 })[0];
+      const startIdx = headers.indexOf('출판 본사 창고');
+      const endIdx = headers.indexOf('영업기획팀 B2B 창고');
+      warehouseCols = headers.slice(startIdx, endIdx + 1).filter(col => col !== '합계');
+
+      let rawData = XLSX.utils.sheet_to_json(ws, { defval: 0 });
+      const categories = new Set();
+
+      allData = rawData.map(row => {
+        const itemCode = row['품목'] ? String(row['품목']) : '';
+        row.품목_34 = itemCode.length >= 4 ? itemCode.substring(2, 4) : '';
+        row['안전재고'] = Number(row['안전재고']) || 0;
+        
+        if (row['대분류']) categories.add(row['대분류']);
+        return row;
+      }).filter(row => row['품목명'] && row['품목']); 
+
+      categoryFilter.innerHTML = '<option value="">전체 대분류</option>';
+      categories.forEach(cat => {
+        if(cat && cat !== 0) {
+          categoryFilter.innerHTML += `<option value="${cat}">${cat}</option>`;
+        }
+      });
+
+      applyFilters();
+    }
+
+    function getActiveWarehouses() {
+      if (currentTeam === 'TEAM1') return warehouseCols.filter(w => TEAM1_WH.includes(w.trim()));
+      if (currentTeam === 'TEAM2') return warehouseCols.filter(w => TEAM2_WH.includes(w.trim()));
+      return warehouseCols; 
+    }
+
+    function applyFilters() {
+      const searchVal = searchInput.value.toLowerCase();
+      const catVal = categoryFilter.value;
+
+      let filtered = allData.filter(item => {
+        const matchSearch = (item['품목명'] && String(item['품목명']).toLowerCase().includes(searchVal)) || 
+                            (item['바코드'] && String(item['바코드']).toLowerCase().includes(searchVal)) ||
+                            (item['품목'] && String(item['품목']).toLowerCase().includes(searchVal));
+        
+        const matchCat = catVal === '' || item['대분류'] === catVal;
+        
+        let matchTab = false;
+        if (currentTab === 'ALL') {
+          matchTab = MAIN_PRODUCTS.includes(item.품목_34);
+        } else if (currentTab.startsWith('CAT:')) {
+          matchTab = item['대분류'] === currentTab.split(':')[1];
+        } else {
+          matchTab = item.품목_34 === currentTab;
+        }
+
+        return matchSearch && matchCat && matchTab;
+      });
+
+      renderList(filtered);
+    }
+
+    function renderList(data) {
+      listContainer.innerHTML = '';
+      
+      if (data.length === 0) {
+        listContainer.innerHTML = `<div style="text-align:center; padding: 30px; color: var(--text-tertiary);">조건에 맞는 데이터가 없습니다.</div>`;
+        return;
+      }
+
+      const activeWarehouses = getActiveWarehouses();
+      const fragment = document.createDocumentFragment();
+
+      data.forEach(item => {
+        const safeStock = item['안전재고'];
+        
+        let teamTotal = 0;
+        let validWarehouses = [];
+        activeWarehouses.forEach(wh => {
+          const val = Number(item[wh]) || 0;
+          teamTotal += val;
+          if (val > 0) {
+            validWarehouses.push({ name: wh, val: val });
+          }
+        });
+        
+        let statusHtml = '';
+        if (teamTotal === 0) {
+          statusHtml = `<span class="pill pill-gray">재고없음</span>`;
+        } else if (teamTotal < safeStock) {
+          statusHtml = `<span class="pill pill-red">부족 (${teamTotal - safeStock})</span>`;
+        }
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        
+        let warehouseListHtml = '';
+        if (validWarehouses.length > 0) {
+          validWarehouses.forEach(wh => {
+            warehouseListHtml += `<div class="wh-row"><span class="wh-name">${wh.name}</span><span class="wh-val">${wh.val.toLocaleString()}</span></div>`;
+          });
+        } else {
+          warehouseListHtml = `<div class="wh-row" style="justify-content:center; color: var(--text-tertiary);">해당 팀 보유 창고에 재고가 없습니다.</div>`;
+        }
+
+        card.innerHTML = `
+          <div class="card-header" onclick="this.parentElement.classList.toggle('open')">
+            <div class="card-header-top">
+              <div class="item-name">${item['품목명']} <div class="item-code">${item['품목']} ${item['바코드'] ? ' / ' + item['바코드'] : ''}</div></div>
+              ${statusHtml}
+            </div>
+            <div class="card-header-bottom">
+              <span style="font-size: 11px; color: var(--text-secondary);">총합계 (선택 팀 기준)</span>
+              <span class="stock-total">${teamTotal.toLocaleString()}개</span>
+            </div>
+          </div>
+          <div class="card-body">
+            ${warehouseListHtml}
+            <button class="btn-copy" onclick="copyToClipboard('${item['품목명']}', ${JSON.stringify(validWarehouses).replace(/"/g, '&quot;')}, ${teamTotal})">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              내역 복사하기
+            </button>
+          </div>
+        `;
+        fragment.appendChild(card);
+      });
+
+      listContainer.appendChild(fragment);
+    }
+
+    function copyToClipboard(itemName, whData, total) {
+      let text = `[${itemName}] 현장 재고 현황\n`;
+      text += `총합계: ${total.toLocaleString()}개\n\n`;
+      
+      if(whData.length === 0) {
+        text += `- 보유 재고 없음\n`;
+      } else {
+        whData.forEach(wh => {
+          text += `- ${wh.name}: ${wh.val.toLocaleString()}개\n`;
+        });
+      }
+
+      navigator.clipboard.writeText(text).then(() => {
+        alert('내역이 클립보드에 복사되었습니다.');
+      }).catch(err => {
+        alert('복사에 실패했습니다.');
+      });
+    }
+
+    searchInput.addEventListener('input', applyFilters);
+    categoryFilter.addEventListener('change', applyFilters);
+    
+    tabs.forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        tabs.forEach(t => t.classList.remove('active'));
+        e.target.classList.add('active');
+        currentTab = e.target.dataset.tab;
+        applyFilters();
+      });
+    });
+
+    teamBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        teamBtns.forEach(t => t.classList.remove('active'));
+        e.target.classList.add('active');
+        currentTeam = e.target.dataset.team;
+        applyFilters();
+      });
+    });
+
+    function showError(msg) {
+      errorMsg.textContent = msg;
+      errorMsg.style.display = 'block';
+    }
+  </script>
+</body>
+</html>
